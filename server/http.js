@@ -34,6 +34,7 @@ const known = {
   ANSWER_CONFLICT: [409, 'An answer for this question has already been recorded.'],
   TOO_EARLY: [409, 'The game is still active. Continue until completion or timeout.'],
   QUESTION_BANK_NOT_READY: [503, 'The game has not been configured yet. Please try later.'],
+  RANDOMIZATION_NOT_READY: [503, 'The database needs the random-order update. Run 005_randomization_readiness.sql in Supabase, then redeploy Vercel. No new attempt was started.'],
   SERVER_CONFIGURATION: [503, 'The game server is not configured yet. Please try later.']
 };
 export function send(res, status, data) {
@@ -63,6 +64,7 @@ export function endpoint(method, callback, dbProvider = getDatabase) {
 }
 export async function rpc(db, name, parameters = {}) {
   const { data, error } = await db.rpc(name, parameters);
+  if (error && ['mm_start_randomized', 'mm_state_randomized'].includes(name) && ['PGRST202', '42883'].includes(error.code)) throw new Error('RANDOMIZATION_NOT_READY');
   if (error) throw new Error(Object.keys(known).find(code => error.message === code) || 'SERVICE_UNAVAILABLE');
   return data;
 }

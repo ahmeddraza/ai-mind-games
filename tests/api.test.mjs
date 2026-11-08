@@ -25,7 +25,7 @@ test('API reserves once, normalizes rolls, hides answers, and cookie resumes wit
   assert.equal((await b.request('finish-game',{})).status,401);
 });
 test('lost start response can retry same nonce; lost answer response retries exactly once', async () => {
-  const a = client(), n = nonce(); app.failNext('mm_start');
+  const a = client(), n = nonce(); app.failNext('mm_start_randomized');
   const first = await a.request('start-game',{ roll_number:'24K-LOST',nonce:n });
   const start = await a.request('start-game',{ roll_number:'24K-LOST',nonce:n });
   assert.equal(start.status,200); assert([200,503].includes(first.status));

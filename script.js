@@ -39,6 +39,12 @@
     $('connection-retry').onclick = retry || null;
     panel.hidden = !message;
   }
+  function sessionNotice(verified) {
+    if (!verified.resumed) return;
+    if (verified.finished) notice('This roll already completed its one attempt. These are its saved results. Use Another Player for an unused roll.');
+    else if (verified.order_type === 'legacy') notice('Resumed a saved attempt from before random ordering. Its original order and timer stay unchanged; unused roll numbers get shuffled questions.');
+    else notice('Resumed your saved attempt. Its shuffled order and timer stay unchanged when you refresh.');
+  }
   function applyState(verified) {
     state.roll = verified.roll_number;
     state.score = verified.score;
@@ -134,7 +140,7 @@
       }
       const verified = await api.start(state.roll);
       notice(''); applyState(verified);
-      if (verified.finished) { renderResults(verified.result); return; }
+      if (verified.finished) { renderResults(verified.result); sessionNotice(verified); return; }
       Object.assign(state, { locked: false, resultId: null, newBest: false });
       lastTick = 60;
       $('score').textContent = state.score.toLocaleString();
@@ -144,6 +150,7 @@
       ticker = setInterval(updateTimer, 80);
       if (state.answered === 0) showRoundIntro();
       else { renderQuestion(); showScreen('game'); updateTimer(); }
+      sessionNotice(verified);
     } catch (error) {
       sound.stop(); showScreen('landing');
       notice(error.message, error.code === 'ALREADY_USED' ? null : startGame);
@@ -302,10 +309,11 @@
       clearInterval(ticker); clearTimeout(transition);
       applyState(verified); pendingAnswer = null; finishing = false;
       notice('');
-      if (verified.finished) { renderResults(verified.result); return; }
+      if (verified.finished) { renderResults(verified.result); sessionNotice(verified); return; }
       state.locked = false; $('score').textContent = state.score.toLocaleString();
       renderQuestion(); showScreen('game');
       ticker = setInterval(updateTimer, 80); updateTimer();
+      sessionNotice(verified);
     } catch (error) {
       if (version !== sessionVersion) return;
       if (error.code !== 'INVALID_SESSION') notice(error.message, restoreSession);

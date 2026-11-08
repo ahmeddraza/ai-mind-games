@@ -18,6 +18,11 @@ window.GameAPI = (() => {
         headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal, cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) { const error = new Error(data.message || 'The request failed. Please retry.'); error.code = data.error; throw error; }
+      if (path === 'start-game' && !data.no_session && data.randomization_version !== 2) {
+        const error = new Error('This deployment is using an older game API. Redeploy the latest Vercel code, then refresh to resume this roll.');
+        error.code = 'DEPLOYMENT_OUTDATED';
+        throw error;
+      }
       if (typeof data.server_now === 'number') data.client_deadline = performance.now() + Math.max(0, data.deadline - data.server_now - (performance.now() - began) / 2);
       return data;
     } catch (error) {

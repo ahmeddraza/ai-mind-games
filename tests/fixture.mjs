@@ -2,10 +2,10 @@
 // via PGlite. Production uses the official SDK against the configured Supabase.
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
-export async function fixture() {
+export async function fixture({ databaseVersion = 5 } = {}) {
   const db = new PGlite();
   await db.exec('create role anon;create role authenticated;create role service_role;');
-  for (const file of ['001_secure_game.sql', '002_question_bank.sql', '004_randomized_question_order.sql']) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
+  for (const file of ['001_secure_game.sql', '002_question_bank.sql', ...(databaseVersion >= 4 ? ['004_randomized_question_order.sql'] : []), ...(databaseVersion >= 5 ? ['005_randomization_readiness.sql'] : [])]) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
   process.env.SUPABASE_URL = 'https://supabase.test';
   process.env.SUPABASE_SECRET_KEY = 'integration-test-only-not-a-real-key';
   const nativeFetch = globalThis.fetch;
@@ -14,7 +14,7 @@ export async function fixture() {
     const url = typeof input === 'string' ? input : input.url || String(input);
     if (!url.startsWith('https://supabase.test/rest/v1/rpc/')) return nativeFetch(input, options);
     const fn = url.split('/').pop();
-    if (!['mm_start','mm_state','mm_answer','mm_finish','mm_leaderboard'].includes(fn)) return new Response('{}', { status:404 });
+    if (!['mm_start','mm_state','mm_start_randomized','mm_state_randomized','mm_answer','mm_finish','mm_leaderboard'].includes(fn)) return new Response('{}', { status:404 });
     const args = JSON.parse(options.body || '{}'), keys = Object.keys(args);
     try {
       const query = `select public.${fn}(${keys.map((key, i) => `${key} => $${i + 1}`).join(',')}) as data`;
