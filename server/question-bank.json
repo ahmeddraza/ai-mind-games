@@ -1,0 +1,189 @@
+[
+  {
+    "title": "AI Personality",
+    "instructions": "Identify the personality or fictional character from the picture and clue.",
+    "questions": [
+      {
+        "image": "ai-personality/batman.jpeg",
+        "title": "Who am I?",
+        "clue": "I have no superpowers, but fear is my greatest weapon.",
+        "options": [
+          "Batman",
+          "Iron Man",
+          "Black Panther",
+          "Daredevil"
+        ],
+        "answer": 0
+      },
+      {
+        "image": "ai-personality/nikola-tesla.jpeg",
+        "title": "Who am I?",
+        "clue": "I helped shape the electrical systems powering our world.",
+        "options": [
+          "Thomas Edison",
+          "Isaac Newton",
+          "Nikola Tesla",
+          "Albert Einstein"
+        ],
+        "answer": 2
+      },
+      {
+        "image": "ai-personality/sherlock-homes.jpeg",
+        "title": "Who am I?",
+        "clue": "I notice the smallest details to solve the biggest mysteries.",
+        "options": [
+          "Hercule Poirot",
+          "Sherlock Holmes",
+          "James Bond",
+          "Benoit Blanc"
+        ],
+        "answer": 1
+      },
+      {
+        "image": "ai-personality/harry-porter.jpeg",
+        "title": "Who am I?",
+        "clue": "A mysterious letter introduced me to a world I never knew existed.",
+        "options": [
+          "Percy Jackson",
+          "Newt Scamander",
+          "Frodo Baggins",
+          "Harry Potter"
+        ],
+        "answer": 3
+      },
+      {
+        "image": "ai-personality/walter-white.jpeg",
+        "title": "Who am I?",
+        "clue": "My knowledge of chemistry took me down a dangerous path.",
+        "options": [
+          "Walter White",
+          "Gus Fring",
+          "Jesse Pinkman",
+          "Saul Goodman"
+        ],
+        "answer": 0
+      },
+      {
+        "image": "ai-personality/einstein.jpeg",
+        "title": "Who am I?",
+        "clue": "I changed the way humanity understands space and time.",
+        "options": [
+          "Isaac Newton",
+          "Stephen Hawking",
+          "Albert Einstein",
+          "Nikola Tesla"
+        ],
+        "answer": 2
+      },
+      {
+        "image": "ai-personality/spiderman.jpeg",
+        "title": "Who am I?",
+        "clue": "An unexpected bite gave me a new way to get around the city.",
+        "options": [
+          "Ant-Man",
+          "Spider-Man",
+          "The Flash",
+          "Deadpool"
+        ],
+        "answer": 1
+      },
+      {
+        "image": "ai-personality/jack-sparrow.jpeg",
+        "title": "Who am I?",
+        "clue": "My unusual compass points toward what I want most.",
+        "options": [
+          "Captain Hook",
+          "Long John Silver",
+          "Hector Barbossa",
+          "Jack Sparrow"
+        ],
+        "answer": 3
+      },
+      {
+        "image": "ai-personality/elsa.jpeg",
+        "title": "Who am I?",
+        "clue": "Learning to control my powers changed the fate of a frozen kingdom.",
+        "options": [
+          "Elsa",
+          "Anna",
+          "Rapunzel",
+          "Merida"
+        ],
+        "answer": 0
+      },
+      {
+        "image": "ai-personality/Morpheus.jpeg",
+        "title": "Who am I?",
+        "clue": "I offer a choice between a comforting illusion and a difficult truth.",
+        "options": [
+          "Neo",
+          "Agent Smith",
+          "Morpheus",
+          "The Oracle"
+        ],
+        "answer": 2
+      }
+    ]
+  },
+  {
+    "title": "AI vs Human",
+    "instructions": "Choose REAL PHOTO or AI GENERATED. REAL PHOTO also includes human-made artwork.",
+    "questions": [
+      {
+        "image": "ai-vs-human/ai_image.png",
+        "title": "Is this a real photograph or AI-generated?",
+        "clue": "Examine the abstract artwork and its details.",
+        "options": [
+          "REAL PHOTO",
+          "AI GENERATED"
+        ],
+        "answer": 1,
+        "labelSource": "Supplied filename: ai_image.png"
+      },
+      {
+        "image": "ai-vs-human/real2_image.jpg",
+        "title": "Is this a real photograph or AI-generated?",
+        "clue": "Look closely at this scene beside a window.",
+        "options": [
+          "REAL PHOTO",
+          "AI GENERATED"
+        ],
+        "answer": 0,
+        "labelSource": "Supplied filename: real2_image.jpg"
+      },
+      {
+        "image": "ai-vs-human/ai2_image.png",
+        "title": "Is this a real photograph or AI-generated?",
+        "clue": "Study the details of this food image.",
+        "options": [
+          "REAL PHOTO",
+          "AI GENERATED"
+        ],
+        "answer": 1,
+        "labelSource": "Supplied filename: ai2_image.png"
+      },
+      {
+        "image": "ai-vs-human/real_image.jpg",
+        "title": "Is this a real photograph or AI-generated?",
+        "clue": "Inspect the portrait and its textures.",
+        "options": [
+          "REAL PHOTO",
+          "AI GENERATED"
+        ],
+        "answer": 0,
+        "labelSource": "Supplied filename and user confirmation: human-made portrait artwork"
+      },
+      {
+        "image": "ai-vs-human/ai3_image.png",
+        "title": "Is this a real photograph or AI-generated?",
+        "clue": "Examine the materials and details of the shoes.",
+        "options": [
+          "REAL PHOTO",
+          "AI GENERATED"
+        ],
+        "answer": 1,
+        "labelSource": "Supplied filename: ai3_image.png"
+      }
+    ]
+  }
+]

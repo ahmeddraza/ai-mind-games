@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const rounds = window.QUESTION_ROUNDS;
-  const TOTAL_QUESTIONS = rounds.reduce((total, round) => total + round.questions.length, 0);
+  const TOTAL_QUESTIONS = rounds.reduce((total, round) => total + round.count, 0);
   const POINTS_PER_ANSWER = 100;
   const MAX_SCORE = TOTAL_QUESTIONS * POINTS_PER_ANSWER;
   const DURATION = 60000;
@@ -11,12 +11,13 @@
   const sound = window.GameAudio;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const state = { screen: 'landing', round: 0, question: 0, score: 0, correct: 0, answered: 0, roll: '', deadline: 0, locked: false, resultId: null, newBest: false };
-  let ticker = null, transition = null, firstStart = 0, lastTick = 60;
+  let ticker = null, transition = null, lastTick = 60;
   const effectsTimers = new Set(), countFrames = new Map();
-  let choices = [], starting = false;
+  let choices = [], starting = false, finishing = false, activeQuestion = null, pendingAnswer = null, sessionVersion = 0;
+  const api = window.GameAPI;
   const imageCache = new Map();
   function preloadImages() {
-    const paths = [...new Set(rounds.flatMap(round => round.questions.map(question => question.image)))];
+    const paths = window.QUESTION_IMAGES;
     return Promise.all(paths.map(path => {
       if (!imageCache.has(path)) {
         imageCache.set(path, new Promise(resolve => {
@@ -31,13 +32,22 @@
       return imageCache.get(path);
     }));
   }
-  function shuffledOptions(question) {
-    const options = question.options.map((text, originalIndex) => ({ text, originalIndex }));
-    for (let i = options.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [options[i], options[j]] = [options[j], options[i]];
-    }
-    return options;
+  function notice(message, retry) {
+    const panel = $('connection-status');
+    $('connection-text').textContent = message;
+    $('connection-retry').hidden = !retry;
+    $('connection-retry').onclick = retry || null;
+    panel.hidden = !message;
+  }
+  function applyState(verified) {
+    state.roll = verified.roll_number;
+    state.score = verified.score;
+    state.correct = verified.correct_answers;
+    state.answered = verified.answered;
+    state.deadline = verified.client_deadline;
+    activeQuestion = verified.question;
+    if (activeQuestion) { state.round = activeQuestion.round - 1; state.question = activeQuestion.round_question - 1; }
+    $('player-label').textContent = `Roll No ${state.roll}`;
   }
 
   function showScreen(name) {
@@ -109,51 +119,41 @@
   }
   async function startGame() {
     if (starting) return;
-    starting = true;
-    clearEffects(); sound.stop();
-    // Unlock before the first await so browsers retain the Start click activation.
-    sound.unlock().then(ready => {
-      if (ready && (starting || ['intro', 'game'].includes(state.screen))) {
-        sound.play('start');
-        sound.setActive(['intro', 'game'].includes(state.screen));
+    sessionVersion++;
+    starting = true; finishing = false; pendingAnswer = null;
+    clearInterval(ticker); clearTimeout(transition); clearEffects(); sound.stop();
+    sound.unlock().then(ready => { if (ready && (starting || ['intro', 'game'].includes(state.screen))) sound.play('start'); });
+    const button = document.querySelector('.start-button');
+    button.disabled = true; notice('Loading challenge images?');
+    try {
+      const loaded = await preloadImages();
+      if (loaded.some(result => !result.loaded)) {
+        loaded.filter(result => !result.loaded).forEach(result => imageCache.delete(result.path));
+        throw new Error('A question image could not load. Check your connection and retry.');
       }
-    });
-    const startButton = document.querySelector('.start-button');
-    const replayButton = $('play-again');
-    startButton.disabled = replayButton.disabled = true;
-    $('roll-help').textContent = 'Loading challenge images…';
-    const loaded = await preloadImages();
-    starting = false;
-    startButton.disabled = replayButton.disabled = false;
-    if (loaded.some(result => !result.loaded)) {
-      loaded.filter(result => !result.loaded).forEach(result => imageCache.delete(result.path));
-      showScreen('landing');
-      $('roll-help').textContent = 'A challenge image could not load. Check the asset folder and try again.';
-      return;
-    }
-    $('roll-help').textContent = '3–20 letters, digits, spaces or hyphens.';
-    clearInterval(ticker); clearTimeout(transition);
-    Object.assign(state, { round: 0, question: 0, score: 0, correct: 0, answered: 0, deadline: 0, locked: false, resultId: null, newBest: false });
-    firstStart = 0;
-    lastTick = 60;
-    $('score').textContent = '0';
-    $('final-score').textContent = '0';
-    $('personal-best').hidden = true;
-    $('timer-box').classList.remove('urgent');
-    $('timer').textContent = '1:00';
-    $('timer-ring').style.strokeDashoffset = '0';
-    $('question-dots').replaceChildren();
-    updateProgress();
-    sound.setActive(true);
-    $('player-label').textContent = `Roll No ${state.roll}`;
-    showRoundIntro();
+      const verified = await api.start(state.roll);
+      notice(''); applyState(verified);
+      if (verified.finished) { renderResults(verified.result); return; }
+      Object.assign(state, { locked: false, resultId: null, newBest: false });
+      lastTick = 60;
+      $('score').textContent = state.score.toLocaleString();
+      $('final-score').textContent = '0'; $('personal-best').hidden = true;
+      $('question-dots').replaceChildren(); updateProgress();
+      sound.setActive(true);
+      ticker = setInterval(updateTimer, 80);
+      if (state.answered === 0) showRoundIntro();
+      else { renderQuestion(); showScreen('game'); updateTimer(); }
+    } catch (error) {
+      sound.stop(); showScreen('landing');
+      notice(error.message, error.code === 'ALREADY_USED' ? null : startGame);
+    } finally { starting = false; button.disabled = false; }
   }
   function showRoundIntro() {
     const round = rounds[state.round];
     $('intro-round').textContent = `Round ${state.round + 1}`;
     $('intro-title').textContent = round.title;
     $('intro-instructions').textContent = round.instructions;
-    document.querySelector('.intro-meta').firstChild.textContent = `${round.questions.length} QUESTIONS `;
+    document.querySelector('.intro-meta').firstChild.textContent = `${round.count} QUESTIONS `;
     $('round-complete').hidden = state.round === 0;
     $('intro').classList.toggle('round-transfer', state.round === 1);
     showScreen('intro');
@@ -162,21 +162,16 @@
     const bar = document.querySelector('.intro-progress span');
     bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = '';
     transition = setTimeout(() => {
-      if (!state.deadline) {
-        firstStart = performance.now();
-        state.deadline = firstStart + DURATION;
-        ticker = setInterval(updateTimer, 80);
-      }
       if (performance.now() >= state.deadline) { finishGame(true); return; }
       renderQuestion(); showScreen('game'); updateTimer();
     }, state.round === 1 ? ROUND_TRANSITION : 1000);
   }
   function renderQuestion() {
-    const round = rounds[state.round], question = round.questions[state.question];
+    const round = rounds[state.round], question = activeQuestion;
     state.locked = false;
     $('round-label').textContent = `Round ${state.round + 1} of 2`;
     $('round-name').textContent = round.title;
-    $('question-counter').textContent = `Question ${state.question + 1} of ${round.questions.length}`;
+    $('question-counter').textContent = `Question ${state.question + 1} of ${round.count}`;
     $('question-category').textContent = state.round === 0 ? 'IDENTIFY THE PERSONALITY' : 'EXAMINE THE IMAGE';
     $('question-title').textContent = question.title;
     $('question-clue').textContent = question.clue;
@@ -186,7 +181,7 @@
     $('answers').classList.toggle('binary', state.round === 1);
     $('game').classList.toggle('round-two', state.round === 1);
     $('answer-feedback').textContent = '';
-    choices = shuffledOptions(question);
+    choices = question.options;
     $('answers').replaceChildren(...choices.map(({ text: option }, index) => {
       const button = document.createElement('button');
       button.className = 'answer'; button.type = 'button';
@@ -207,7 +202,7 @@
     return option;
   }
   function updateProgress() {
-    const current = rounds.slice(0, state.round).reduce((total, round) => total + round.questions.length, 0) + state.question;
+    const current = rounds.slice(0, state.round).reduce((total, round) => total + round.count, 0) + state.question;
     $('overall-progress').replaceChildren(document.createTextNode(String(current + 1).padStart(2, '0') + ' '));
     const total = document.createElement('small'); total.textContent = `/ ${TOTAL_QUESTIONS}`; $('overall-progress').append(total);
     $('question-dots').style.setProperty('--total-questions', TOTAL_QUESTIONS);
@@ -219,90 +214,119 @@
     });
     $('question-dots').setAttribute('aria-label', `${state.answered} of ${TOTAL_QUESTIONS} answered. Current challenge ${current + 1}.`);
   }
-  function answerQuestion(index) {
-    if (state.screen !== 'game' || state.locked || state.answered >= TOTAL_QUESTIONS) return;
-    if (performance.now() >= state.deadline) { finishGame(true); return; }
-    const question = rounds[state.round].questions[state.question];
-    if (index < 0 || index >= question.options.length) return;
+  async function answerQuestion(index) {
+    if (state.screen !== 'game' || state.locked || finishing || state.answered >= TOTAL_QUESTIONS || !choices[index]) return;
+    if (performance.now() >= state.deadline) { finishGame(); return; }
     state.locked = true;
-    const correct = choices[index].originalIndex === question.answer;
-    state.answered++;
-    if (correct) { state.score += POINTS_PER_ANSWER; state.correct++; }
-    countUp($('score'), state.score, 260);
-    if (correct) {
-      animateClass($('score-pop'), 'pop');
-      animateClass($('score'), 'score-bump');
-    }
-    const buttons = [...$('answers').children];
-    buttons.forEach(button => { button.disabled = true; });
-    buttons[index].classList.add('selected', correct ? 'correct' : 'incorrect');
-    $('answer-feedback').textContent = correct ? 'Signal matched. +100 points' : 'Not this time. +0 points';
-    updateProgress();
-    sound.play('tap');
-    sound.play(correct ? 'correct' : 'wrong');
-    if (correct) sound.play('point');
-    transition = setTimeout(() => {
-      if (state.answered === TOTAL_QUESTIONS) { finishGame(false); return; }
-      if (performance.now() >= state.deadline) { finishGame(true); return; }
-      state.question++;
-      if (state.question === rounds[state.round].questions.length) {
-        state.round++; state.question = 0;
-        if (state.round === rounds.length) { finishGame(false); return; }
-        showRoundIntro();
-      } else renderQuestion();
-    }, ANSWER_DELAY);
+    pendingAnswer = { question: activeQuestion.id, option: choices[index].id, index, round: state.round };
+    [...$('answers').children].forEach(button => { button.disabled = true; });
+    sound.unlock().then(() => sound.play('tap'));
+    await submitPending();
   }
-  function finishGame(timedOut) {
-    if (state.screen === 'results' || state.screen === 'landing') return;
-    timedOut = timedOut && state.answered < TOTAL_QUESTIONS;
-    clearInterval(ticker); clearTimeout(transition); state.locked = true;
-    clearEffects(); sound.stop();
-    $('timer-box').classList.remove('urgent');
-    const remaining = Math.max(0, Math.ceil((state.deadline - performance.now()) / 1000));
-    const previous = window.Leaderboard.read().filter(entry => entry.roll === state.roll);
-    state.newBest = state.score > Math.max(0, ...previous.map(entry => entry.score));
-    const result = window.Leaderboard.save(state.roll, state.score);
-    state.resultId = result.id;
-    $('final-score').textContent = '0';
-    $('score').textContent = state.score.toLocaleString();
-    $('personal-best').hidden = !state.newBest;
-    $('results-title').textContent = 'CHALLENGE COMPLETE';
-    $('result-player').textContent = `PLAYER / ${state.roll}`;
-    $('performance-feedback').textContent = state.score >= MAX_SCORE * .8 ? 'Exceptional pattern recognition. Your intuition is a force to be reckoned with.' : state.score >= MAX_SCORE * .5 ? 'A strong signal. You spotted the patterns and kept your cool under pressure.' : state.score >= MAX_SCORE * .25 ? 'Curiosity is your advantage. Another run could be your breakthrough.' : 'Every great mind starts with curiosity. Recalibrate, trust your instincts, and try again.';
-    $('correct-count').textContent = state.correct;
-    $('incorrect-count').textContent = state.answered - state.correct;
-    $('unanswered-count').textContent = TOTAL_QUESTIONS - state.answered;
-    $('answered-count').textContent = state.answered;
-    $('total-count').textContent = TOTAL_QUESTIONS;
-    $('accuracy').textContent = `${state.answered ? Math.round(state.correct / state.answered * 100) : 0}%`;
-    $('final-rank').textContent = result.rank ? `#${result.rank}` : '—';
-    $('time-remaining').textContent = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
-    $('finish-message').textContent = timedOut ? `Time's up! You answered ${state.answered} of ${TOTAL_QUESTIONS} questions.` : `All ${TOTAL_QUESTIONS} answered. That's some quick thinking!`;
-    $('save-status').textContent = result.persistent ? 'Score saved on this browser. Your next personal best is waiting.' : 'Browser storage is unavailable. Your score is kept for this session.';
-    showScreen('results');
-    countUp($('final-score'), state.score, 850);
-    sound.play('end');
-    if (state.score >= MAX_SCORE * .8 || state.newBest) {
-      celebrate(); later(() => sound.play('high'), 550);
+  async function submitPending() {
+    if (!pendingAnswer || finishing || state.screen !== 'game') return;
+    const pending = pendingAnswer;
+    try {
+      const verified = await api.answer(pending.question, pending.option);
+      if (finishing || state.screen === 'results') return;
+      notice('');
+      const correct = verified.feedback?.question_id === pending.question && verified.feedback.correct;
+      applyState(verified);
+      countUp($('score'), state.score, 260);
+      if (correct) { animateClass($('score-pop'), 'pop'); animateClass($('score'), 'score-bump'); }
+      const button = $('answers').children[pending.index];
+      button?.classList.add('selected', correct ? 'correct' : 'incorrect');
+      $('answer-feedback').textContent = verified.feedback ? (correct ? 'Signal matched. +100 points' : 'Not this time. +0 points') : 'Time is up. Finalizing received answers?';
+      if (verified.feedback) { sound.play(correct ? 'correct' : 'wrong'); if (correct) sound.play('point'); }
+      updateProgress(); pendingAnswer = null;
+      transition = setTimeout(() => {
+        if (verified.finished) { clearInterval(ticker); renderResults(verified.result); return; }
+        if (performance.now() >= state.deadline) { finishGame(); return; }
+        if (state.round !== pending.round) showRoundIntro(); else renderQuestion();
+      }, ANSWER_DELAY);
+    } catch (error) {
+      if (finishing || state.screen === 'results') return;
+      if (['OUT_OF_ORDER', 'ANSWER_CONFLICT'].includes(error.code)) notice(error.message, restoreSession);
+      else notice(error.message, submitPending);
     }
+  }
+  async function finishGame() {
+    if (finishing || state.screen === 'results' || state.screen === 'landing') return;
+    finishing = true; state.locked = true;
+    clearInterval(ticker); clearTimeout(transition); clearEffects(); sound.stop();
+    notice('Confirming your received answers with the server?');
+    try {
+      const verified = await api.finish();
+      applyState(verified); pendingAnswer = null; notice(''); renderResults(verified.result);
+    } catch (error) {
+      finishing = false;
+      if (error.code === 'TOO_EARLY') { await restoreSession(); return; }
+      notice(error.message + ' Your attempt remains reserved.', finishGame);
+    }
+  }
+  function renderResults(result) {
+    clearInterval(ticker); clearTimeout(transition); clearEffects(); sound.stop();
+    finishing = false; state.locked = true;
+    state.score = result.score; state.correct = result.correct_answers; state.answered = result.answered;
+    state.roll = result.roll_number; state.resultId = result.id; state.newBest = result.score >= MAX_SCORE * .8;
+    $('timer-box').classList.remove('urgent');
+    $('final-score').textContent = '0'; $('score').textContent = result.score.toLocaleString();
+    $('personal-best').hidden = true;
+    $('results-title').textContent = 'CHALLENGE COMPLETE';
+    $('result-player').textContent = `PLAYER / ${result.roll_number}`;
+    $('performance-feedback').textContent = result.score >= MAX_SCORE * .8 ? 'Exceptional pattern recognition. Your intuition is a force to be reckoned with.' : result.score >= MAX_SCORE * .5 ? 'A strong signal. You spotted the patterns and kept your cool under pressure.' : result.score >= MAX_SCORE * .25 ? 'Curiosity is your advantage. Another run could be your breakthrough.' : 'Every great mind starts with curiosity. Recalibrate, trust your instincts, and try again.';
+    $('correct-count').textContent = result.correct_answers;
+    $('incorrect-count').textContent = result.incorrect_answers;
+    $('unanswered-count').textContent = result.unanswered_questions;
+    $('answered-count').textContent = result.answered;
+    $('total-count').textContent = result.total;
+    $('accuracy').textContent = `${result.accuracy}%`;
+    $('final-rank').textContent = result.rank ? `#${result.rank}` : '?';
+    $('time-remaining').textContent = `${Math.floor(result.time_remaining / 60)}:${String(result.time_remaining % 60).padStart(2, '0')}`;
+    $('finish-message').textContent = result.unanswered_questions ? `Time's up! ${result.answered} of ${result.total} answers received.` : `All ${result.total} answers received. That's some quick thinking!`;
+    $('save-status').textContent = 'Verified score saved to the global leaderboard. One attempt per roll number.';
+    showScreen('results'); countUp($('final-score'), result.score, 850);
+    sound.play('end');
+    if (state.newBest) { celebrate(); later(() => sound.play('high'), 550); }
     later(() => sound.stop(), 1700);
   }
-  function openLeaderboard() {
-    const rows = window.Leaderboard.read().slice(0, 10);
-    $('leaderboard-body').replaceChildren(...rows.map((entry, index) => {
-      const tr = document.createElement('tr');
-      if (entry.id === state.resultId) {
-        tr.classList.add('current-player');
-        if (state.newBest) tr.classList.add('new-score-entry');
-      }
-      [String(index + 1).padStart(2, '0'), entry.roll, `${entry.score.toLocaleString()} / ${MAX_SCORE}`].forEach((value, column) => {
-        const td = document.createElement('td'); td.textContent = value;
-        if (column === 0 && index < 3) td.className = 'rank-medal'; tr.append(td);
-      });
-      return tr;
-    }));
-    $('leaderboard-note').textContent = `Local ${TOTAL_QUESTIONS}-question leaderboard · Includes 3 sample scores. Repeat plays are separate entries. ${window.Leaderboard.isPersistent() ? 'Scores are stored only on this browser. Previous-format scores remain saved separately.' : 'Storage is unavailable; scores last for this session only.'}`;
-    $('leaderboard-modal').showModal();
+  async function restoreSession() {
+    const version = sessionVersion;
+    try {
+      const verified = await api.resume();
+      if (version !== sessionVersion) return;
+      if (verified.no_session) return;
+      clearInterval(ticker); clearTimeout(transition);
+      applyState(verified); pendingAnswer = null; finishing = false;
+      notice('');
+      if (verified.finished) { renderResults(verified.result); return; }
+      state.locked = false; $('score').textContent = state.score.toLocaleString();
+      renderQuestion(); showScreen('game');
+      ticker = setInterval(updateTimer, 80); updateTimer();
+    } catch (error) {
+      if (version !== sessionVersion) return;
+      if (error.code !== 'INVALID_SESSION') notice(error.message, restoreSession);
+    }
+  }
+  async function openLeaderboard() {
+    const modal = $('leaderboard-modal');
+    if (!modal.open) modal.showModal();
+    $('leaderboard-body').replaceChildren();
+    $('leaderboard-note').textContent = 'Loading global scores?';
+    $('leaderboard-retry').hidden = true;
+    try {
+      const { rows } = await api.leaderboard();
+      $('leaderboard-body').replaceChildren(...rows.map(entry => {
+        const tr = document.createElement('tr');
+        if (entry.id === state.resultId) { tr.classList.add('current-player'); if (state.newBest) tr.classList.add('new-score-entry'); }
+        [String(entry.rank).padStart(2, '0'), entry.roll_number, `${entry.score.toLocaleString()} / ${MAX_SCORE}`].forEach((value, column) => {
+          const td = document.createElement('td'); td.textContent = value;
+          if (column === 0 && entry.rank <= 3) td.className = 'rank-medal'; tr.append(td);
+        });
+        return tr;
+      }));
+      $('leaderboard-note').textContent = rows.length ? 'Global verified scores. Ties favor the earliest submission.' : 'No completed attempts yet. Be the first to finish!';
+    } catch (error) { $('leaderboard-note').textContent = error.message; $('leaderboard-retry').hidden = false; }
   }
   $('start-form').addEventListener('submit', event => {
     event.preventDefault();
@@ -311,8 +335,9 @@
     if (!input.reportValidity()) return;
     state.roll = input.value.toUpperCase(); startGame();
   });
-  $('play-again').addEventListener('click', startGame);
-  $('back-home').addEventListener('click', () => { clearEffects(); sound.stop(); showScreen('landing'); $('roll-number').focus(); });
+  $('play-again').addEventListener('click', () => { clearEffects(); sound.stop(); showScreen('landing'); $('roll-number').value = ''; notice('One attempt per roll number. Enter another player?s roll number.'); $('roll-number').focus(); });
+  $('leaderboard-retry').addEventListener('click', openLeaderboard);
+  $('back-home').addEventListener('click', () => { clearEffects(); sound.stop(); showScreen('landing'); notice(''); $('roll-number').focus(); });
   document.querySelectorAll('.leaderboard-trigger').forEach(button => button.addEventListener('click', openLeaderboard));
   $('close-leaderboard').addEventListener('click', () => $('leaderboard-modal').close());
   $('leaderboard-modal').addEventListener('click', event => { if (event.target === $('leaderboard-modal')) { const rect = event.target.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.target.close(); } });
@@ -344,4 +369,5 @@
   syncAudioControls();
   // Start warming the cache immediately. The clock starts only after loading and the intro.
   preloadImages();
+  restoreSession();
 })();
