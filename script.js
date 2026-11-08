@@ -13,7 +13,7 @@
   const state = { screen: 'landing', round: 0, question: 0, score: 0, correct: 0, answered: 0, roll: '', deadline: 0, locked: false, resultId: null, newBest: false };
   let ticker = null, transition = null, lastTick = 60;
   const effectsTimers = new Set(), countFrames = new Map();
-  let choices = [], starting = false, finishing = false, activeQuestion = null, pendingAnswer = null, sessionVersion = 0;
+  let choices = [], assignedOrder = [], starting = false, finishing = false, activeQuestion = null, pendingAnswer = null, sessionVersion = 0;
   const api = window.GameAPI;
   const imageCache = new Map();
   function preloadImages() {
@@ -46,6 +46,7 @@
     state.answered = verified.answered;
     state.deadline = verified.client_deadline;
     activeQuestion = verified.question;
+    assignedOrder = verified.question_order || [];
     if (activeQuestion) { state.round = activeQuestion.round - 1; state.question = activeQuestion.round_question - 1; }
     $('player-label').textContent = `Roll No ${state.roll}`;
   }
@@ -171,7 +172,7 @@
     state.locked = false;
     $('round-label').textContent = `Round ${state.round + 1} of 2`;
     $('round-name').textContent = round.title;
-    $('question-counter').textContent = `Question ${state.question + 1} of ${round.count}`;
+    $('question-counter').textContent = `Question ${question.position || state.answered + 1} of ${TOTAL_QUESTIONS}`;
     $('question-category').textContent = state.round === 0 ? 'IDENTIFY THE PERSONALITY' : 'EXAMINE THE IMAGE';
     $('question-title').textContent = question.title;
     $('question-clue').textContent = question.clue;
@@ -202,7 +203,9 @@
     return option;
   }
   function updateProgress() {
-    const current = rounds.slice(0, state.round).reduce((total, round) => total + round.count, 0) + state.question;
+    const current = activeQuestion
+      ? (activeQuestion.position || assignedOrder.indexOf(activeQuestion.id) + 1 || state.answered + 1) - 1
+      : Math.max(0, state.answered - 1);
     $('overall-progress').replaceChildren(document.createTextNode(String(current + 1).padStart(2, '0') + ' '));
     const total = document.createElement('small'); total.textContent = `/ ${TOTAL_QUESTIONS}`; $('overall-progress').append(total);
     $('question-dots').style.setProperty('--total-questions', TOTAL_QUESTIONS);

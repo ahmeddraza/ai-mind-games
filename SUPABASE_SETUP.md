@@ -2,6 +2,35 @@
 
 The existing game now uses same-origin Vercel API functions. The frontend is still HTML, CSS and vanilla JavaScript. The official Supabase JavaScript SDK runs only on the server. There is no frontend framework or bundler. The small build script copies an explicit public-file allowlist into `dist/`.
 
+## Upgrade an existing deployment: randomized order
+
+If migrations 001–003 are already installed, **run only the full contents of `supabase/migrations/004_randomized_question_order.sql` in your Supabase SQL Editor**. Do not rerun or overwrite the older migrations or reseed questions for this update.
+
+Then deploy the updated repository to the same Vercel project. Keep the existing `SUPABASE_URL` and server-key environment variables; no new environment variables, dependencies, extensions, or API routes are needed. The existing install/build/output settings remain `npm ci`, `npm run build`, and `dist`.
+
+Exact upgrade sequence:
+
+1. Run `npm ci`, `npm test`, and `npm run build` locally to validate the checkout.
+2. Run migration **004 only**, once, in the existing Supabase project's SQL Editor as postgres.
+3. Deploy this updated checkout through your existing Git-connected Vercel project, or run your normal Vercel production deployment. Deploy the SQL first; the existing frontend already submits stable IDs and remains compatible while the new frontend deploys.
+4. Refresh the deployed site. Start two unused test roll numbers and compare assigned sequences. Refresh an active test session and confirm its sequence/deadline stay unchanged. Complete a session and check its verified global score.
+
+Migration 004 changes database functions only: it does not update/delete existing leaderboard rows, answers, reservations or snapshots. Active and completed pre-upgrade sessions keep their original sequence and option IDs. **Only new reservations get a new random order.** Existing rolls cannot be reused to request a reshuffle.
+
+The server runs unbiased Fisher–Yates separately on the ten personality questions and five classification questions, and on each question's options. It obtains random integers from the random bits in PostgreSQL's `gen_random_uuid()`, rejecting samples outside an even multiple of each bound to avoid modulo bias. PostgreSQL's [UUID implementation](https://github.com/postgres/postgres/blob/REL_17_STABLE/src/backend/utils/adt/uuid.c) uses `pg_strong_random` and sets UUID version/variant bits outside the first 32 bits used here. No browser-side shuffle or PostgreSQL `random()` is used for newly assigned orders.
+
+The existing `mind_games_private.attempts.snapshot` JSON array stores each assigned order and correct-option mapping. API state includes a safe `question_order` list of stable IDs plus only the active question, with its 1–15 display `position`. Submission checks compare the submitted stable ID against the next snapshot question's ID, not against the display position or an answer letter. The complete answer key stays private. Equal permutations across different sessions remain mathematically possible and valid.
+
+To inspect assigned IDs without selecting secret credentials or answer keys, use the SQL editor:
+
+```sql
+select a.roll_number,
+       jsonb_agg((q.value->>'id')::integer order by q.ordinality) as assigned_order
+from mind_games_private.attempts a,
+     lateral jsonb_array_elements(a.snapshot) with ordinality q(value, ordinality)
+group by a.roll_number;
+```
+
 ## 1. Execute the SQL in Supabase
 
 Open **your Supabase project → SQL Editor → New query**. Paste and run the **entire contents** of each file below, in this order, using the SQL editor's postgres role:
@@ -9,8 +38,9 @@ Open **your Supabase project → SQL Editor → New query**. Paste and run the *
 1. `supabase/migrations/001_secure_game.sql`
 2. `supabase/migrations/002_question_bank.sql`
 3. Enable **pg_cron** under **Database → Extensions**, then run `supabase/migrations/003_expiry_schedule.sql`.
+4. `supabase/migrations/004_randomized_question_order.sql`
 
-Run all three files on the same project. The second file contains the unchanged 15-question answer key and belongs only in the database/private source, never in a public static folder. The third file finalizes abandoned expired attempts every minute. Leaderboard and session requests also finalize expired attempts, so the accepted-answer cutoff is always the original 60-second deadline, independent of cron timing. The expiry worker processes up to 100 overdue attempts per invocation; under larger backlogs allow subsequent batches or schedule it more often using Supabase Cron.
+For a new installation, run all four files on the same project. For an existing installation, follow the upgrade section above instead. The second file contains the unchanged 15-question answer key and belongs only in the database/private source, never in a public static folder. The third file finalizes abandoned expired attempts every minute. Leaderboard and session requests also finalize expired attempts, so the accepted-answer cutoff is always the original 60-second deadline, independent of cron timing. The expiry worker processes up to 100 overdue attempts per invocation; under larger backlogs allow subsequent batches or schedule it more often using Supabase Cron.
 
 Migration 001 retains `public.leaderboard` and its existing ID type/default. It requires the columns `id`, `roll_number`, `score`, `correct_answers`, `created_at`. It normalizes valid roll numbers, adds uniqueness/scoring constraints, removes existing leaderboard policies, enables RLS, revokes public table access, and grants the game RPCs only to `service_role`. It does not delete or rescale existing leaderboard rows. If old rows violate scoring rules or collide after normalization, the transaction aborts. Review/export/archive those rows yourself, then retry. `id` must already have an identity/default generator if using an existing table.
 
@@ -106,9 +136,9 @@ Created:
 
 - `api/start-game.js`, `api/submit-answer.js`, `api/finish-game.js`, `api/leaderboard.js`
 - `server/db.js`, `server/http.js`, `server/question-bank.json`
-- `supabase/migrations/001_secure_game.sql`, `002_question_bank.sql`, `003_expiry_schedule.sql`
+- `supabase/migrations/001_secure_game.sql`, `002_question_bank.sql`, `003_expiry_schedule.sql`, `004_randomized_question_order.sql`
 - `scripts/prepare-static.mjs`, `scripts/dev-server.mjs`, `scripts/generate-question-seed.mjs`
-- `tests/database.test.mjs`, `tests/api.test.mjs`, `tests/build.test.mjs`, `tests/fixture.mjs`
+- `tests/database.test.mjs`, `tests/api.test.mjs`, `tests/build.test.mjs`, `tests/fixture.mjs`, `tests/randomization.test.mjs`
 - `package.json`, `package-lock.json`, `vercel.json`, `.gitignore`, `.env.example`, `SUPABASE_SETUP.md`
 
 The authoritative question data moved unchanged into the private bank. Audio and image files were not modified. No real `.env` file, server key, database credential, or Git commit was created.
@@ -119,7 +149,7 @@ Run `npm test` and `npm run build`. Automated database/API tests use PGlite's lo
 
 Before event use on the deployed site, check:
 
-- [ ] SQL 001, 002 and 003 ran successfully; the expiry cron job is active.
+- [ ] SQL 001–004 are installed; the expiry cron job is active. Existing deployments apply only the new 004 migration for this upgrade.
 - [ ] Env variables are configured and `/api/leaderboard` responds successfully.
 - [ ] Two browser/device sessions display the same global leaderboard.
 - [ ] The same normalized roll is rejected in a fresh/incognito session, even after timeout.
@@ -127,6 +157,9 @@ Before event use on the deployed site, check:
 - [ ] Refresh during an attempt continues the timer and received-answer count.
 - [ ] A lost answer response can Retry without earning points twice.
 - [ ] All 15 images/questions work; Round 2 starts at question 11 and does not reset time.
+- [ ] New sessions can have different question orders, each containing ten distinct Round 1 IDs followed by five distinct Round 2 IDs.
+- [ ] Refresh preserves the full assigned sequence and shuffled options; an existing roll cannot obtain a fresh order.
+- [ ] Attempts started before migration 004 continue with their original snapshots and existing scores remain intact.
 - [ ] A perfect run earns 1500; wrong answers earn zero; partial timeout reports unanswered questions.
 - [ ] POST finish with `{ "score": 1500 }` is rejected; repeated valid finish requests return the same row.
 - [ ] The publishable/anon key cannot directly insert/update/delete `public.leaderboard` or call game RPCs.

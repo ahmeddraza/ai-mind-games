@@ -4,11 +4,14 @@ AWS SBG FAST NUCES Karachi's HTML/CSS/vanilla-JavaScript arcade game, now using 
 
 **Setup and deployment:** follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md). It lists the exact SQL files, Vercel environment variables, deployment steps and testing checklist.
 
+**Random-order upgrade for an existing deployment:** run only `supabase/migrations/004_randomized_question_order.sql` in Supabase, then redeploy this checkout on Vercel. Do not rerun old migrations or reset the database. Existing attempts keep their saved order; new attempts get server-generated, independently shuffled 10-question and 5-question rounds and securely shuffled options. Identical random sequences across players are possible. Full upgrade steps are at the top of the setup guide.
+
 - Round 1: 10 AI Personality questions.
 - Round 2: 5 AI vs Human questions.
 - One server-authoritative 60-second timer, starting at reservation and including intros.
 - +100 per correct answer, zero for wrong answers, maximum 1500.
 - One attempt per normalized roll; refresh recovers an existing attempt rather than restarting it.
+- Randomized order is stored in each private session snapshot; scoring validates stable question IDs in the assigned sequence. Display progress is 1/15 through 15/15.
 - Same questions, images, original AWS SBG theme, Web Audio effects and animations.
 - Database-calculated results and a shared top-10 leaderboard; no local score submission.
 

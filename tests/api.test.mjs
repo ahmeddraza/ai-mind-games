@@ -31,9 +31,10 @@ test('lost start response can retry same nonce; lost answer response retries exa
   assert.equal(start.status,200); assert([200,503].includes(first.status));
   assert.equal((await app.db.query("select count(*)::int n from mind_games_private.attempts where roll_number='24KLOST'")).rows[0].n,1);
   const correct = (await app.db.query("select snapshot->0->>'correct_option' id from mind_games_private.attempts where roll_number='24KLOST'")).rows[0].id;
-  app.failNext('mm_answer'); await a.request('submit-answer',{ question_id:1,option_id:correct });
-  const retry = await a.request('submit-answer',{ question_id:1,option_id:correct });
-  assert.equal(retry.body.score,100); assert.equal(retry.body.answered,1);assert.equal(retry.body.question.id,2);
+  const questionId = start.body.question.id;
+  app.failNext('mm_answer'); await a.request('submit-answer',{ question_id:questionId,option_id:correct });
+  const retry = await a.request('submit-answer',{ question_id:questionId,option_id:correct });
+  assert.equal(retry.body.score,100); assert.equal(retry.body.answered,1);assert.equal(retry.body.question.id,start.body.question_order[1]);
 });
 test('fabricated scores, wrong methods, cross-origin requests and private files are rejected', async () => {
   const a = client(); await a.request('start-game',{ roll_number:'24K-FORGE',nonce:nonce() });

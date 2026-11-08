@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 export async function fixture() {
   const db = new PGlite();
   await db.exec('create role anon;create role authenticated;create role service_role;');
-  for (const file of ['001_secure_game.sql', '002_question_bank.sql']) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
+  for (const file of ['001_secure_game.sql', '002_question_bank.sql', '004_randomized_question_order.sql']) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
   process.env.SUPABASE_URL = 'https://supabase.test';
   process.env.SUPABASE_SECRET_KEY = 'integration-test-only-not-a-real-key';
   const nativeFetch = globalThis.fetch;
