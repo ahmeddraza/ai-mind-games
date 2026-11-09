@@ -232,6 +232,8 @@
       if (correct) { animateClass($('score-pop'), 'pop'); animateClass($('score'), 'score-bump'); }
       const button = $('answers').children[pending.index];
       button?.classList.add('selected', correct ? 'correct' : 'incorrect');
+      // Reveal the answered personality during feedback, for either outcome.
+      if (pending.round === 0 && verified.feedback?.question_id === pending.question) $('question-image').classList.remove('round-one-image');
       $('answer-feedback').textContent = verified.feedback ? (correct ? 'Correct. +100 points' : 'Incorrect. No points added.') : 'Time is up. Finalizing received answers…';
       if (verified.feedback) { sound.play(correct ? 'correct' : 'wrong'); if (correct) sound.play('point'); }
       updateProgress(); pendingAnswer = null;

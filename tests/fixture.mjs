@@ -2,10 +2,10 @@
 // via PGlite. Production uses the official SDK against the configured Supabase.
 import { PGlite } from '@electric-sql/pglite';
 import { readFile } from 'node:fs/promises';
-export async function fixture({ databaseVersion = 5 } = {}) {
+export async function fixture({ databaseVersion = 6 } = {}) {
   const db = new PGlite();
   await db.exec('create role anon;create role authenticated;create role service_role;');
-  for (const file of ['001_secure_game.sql', '002_question_bank.sql', ...(databaseVersion >= 4 ? ['004_randomized_question_order.sql'] : []), ...(databaseVersion >= 5 ? ['005_randomization_readiness.sql'] : [])]) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
+  for (const file of ['001_secure_game.sql', '002_question_bank.sql', ...(databaseVersion >= 4 ? ['004_randomized_question_order.sql'] : []), ...(databaseVersion >= 5 ? ['005_randomization_readiness.sql'] : []), ...(databaseVersion >= 6 ? ['006_two_line_personality_clues.sql'] : [])]) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
   process.env.SUPABASE_URL = 'https://supabase.test';
   process.env.SUPABASE_SECRET_KEY = 'integration-test-only-not-a-real-key';
   const nativeFetch = globalThis.fetch;

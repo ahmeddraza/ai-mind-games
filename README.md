@@ -29,6 +29,6 @@ npm test
 npm run build
 ```
 
-Question content is preserved in `server/question-bank.json` and seeded by `supabase/migrations/002_question_bank.sql`. `questions.js` contains public display metadata and preload paths only. After deliberately editing the private bank, use `npm run seed:generate` and execute the updated seed SQL. In-progress attempts keep immutable question snapshots. See `QUESTION_AUDIT.md` for the unchanged selected images and labels; that audit is excluded from the public deployment.
+Question content is maintained in `server/question-bank.json`. Migration `002_question_bank.sql` is the original seed; migration `006_two_line_personality_clues.sql` expands the ten Round 1 clues into two lines. For an existing deployment, run only migration 006 after 001-005, then redeploy; do not regenerate or rerun the original seed. Future live content changes should use a new numbered data migration. `questions.js` contains public display metadata and preload paths only. In-progress attempts keep immutable question snapshots. See `QUESTION_AUDIT.md` for the unchanged selected images and labels; that audit is excluded from the public deployment.
 
 The roll reservation prevents repeated use of an identifier; it does **not** verify who owns that student roll number. No credentials, database keys, or authoritative answer-key files are included in the static output. The publishable key supplied in chat is not needed.

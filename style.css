@@ -113,7 +113,7 @@ input::placeholder { color: #91a99ab0; }
 .image-panel img.round-one-image { filter: blur(16px); scale: 1.06; }
 .question-panel { min-width: 0; }
 .question-panel h2 { font: 600 clamp(28px, 2.6vw, 38px)/1.2 var(--heading); letter-spacing: -.9px; }
-.question-clue { margin: var(--space-4) 0 var(--space-6); font-size: 17px; line-height: 1.75; color: var(--muted); }
+.question-clue { margin: var(--space-4) 0 var(--space-6); font-size: 17px; line-height: 1.75; color: var(--muted); white-space: pre-line; }
 .answers { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .answer { display: flex; align-items: center; gap: var(--space-3); min-width: 0; min-height: 76px; padding: var(--space-4); border: 1px solid var(--line); border-radius: 6px; color: var(--text); background: var(--secondary); text-align: left; position: relative; }
 .answer-letter { flex-shrink: 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }

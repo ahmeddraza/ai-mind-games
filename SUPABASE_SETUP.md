@@ -2,6 +2,12 @@
 
 The existing game now uses same-origin Vercel API functions. The frontend is still HTML, CSS and vanilla JavaScript. The official Supabase JavaScript SDK runs only on the server. There is no frontend framework or bundler. The small build script copies an explicit public-file allowlist into `dist/`.
 
+## Expand the Round 1 clues
+
+For an existing installation with migrations 001-005 applied, run the full contents of **`supabase/migrations/006_two_line_personality_clues.sql`** in Supabase SQL Editor, then redeploy the frontend. This changes only the ten Round 1 clue strings. It does not change answers, images, scoring, database structure, or game functions. Do not rerun the original seed or reset participant data.
+
+Each clue contains two short sentences separated by a line break; the frontend preserves that break and allows natural wrapping on mobile. Round 2 is unchanged. Existing attempts keep their saved clues; test the new wording with an unused roll number after the migration. Updating the private JSON file alone does not update a deployed database.
+
 ## Fix a deployment that still serves the original order
 
 If migrations 001-003 are installed, **run only the full contents of `supabase/migrations/005_randomization_readiness.sql` in your Supabase SQL Editor**. This self-contained repair works whether migration 004 was applied or missed. Do not rerun older migrations, reseed questions, or reset attempts.
@@ -44,8 +50,9 @@ Open **your Supabase project → SQL Editor → New query**. Paste and run the *
 3. Enable **pg_cron** under **Database → Extensions**, then run `supabase/migrations/003_expiry_schedule.sql`.
 4. `supabase/migrations/004_randomized_question_order.sql`
 5. `supabase/migrations/005_randomization_readiness.sql`
+6. `supabase/migrations/006_two_line_personality_clues.sql`
 
-For a new installation, run all five files on the same project. For an existing installation, follow the upgrade section above instead. The second file contains the unchanged 15-question answer key and belongs only in the database/private source, never in a public static folder. The third file finalizes abandoned expired attempts every minute. Leaderboard and session requests also finalize expired attempts, so the accepted-answer cutoff is always the original 60-second deadline, independent of cron timing. The expiry worker processes up to 100 overdue attempts per invocation; under larger backlogs allow subsequent batches or schedule it more often using Supabase Cron.
+For a new installation, run all six files on the same project. For an existing installation, follow the upgrade section above instead. The second file contains the original 15-question answer key (migration 006 expands only the Round 1 clues) and belongs only in the database/private source, never in a public static folder. The third file finalizes abandoned expired attempts every minute. Leaderboard and session requests also finalize expired attempts, so the accepted-answer cutoff is always the original 60-second deadline, independent of cron timing. The expiry worker processes up to 100 overdue attempts per invocation; under larger backlogs allow subsequent batches or schedule it more often using Supabase Cron.
 
 Migration 001 retains `public.leaderboard` and its existing ID type/default. It requires the columns `id`, `roll_number`, `score`, `correct_answers`, `created_at`. It normalizes valid roll numbers, adds uniqueness/scoring constraints, removes existing leaderboard policies, enables RLS, revokes public table access, and grants the game RPCs only to `service_role`. It does not delete or rescale existing leaderboard rows. If old rows violate scoring rules or collide after normalization, the transaction aborts. Review/export/archive those rows yourself, then retry. `id` must already have an identity/default generator if using an existing table.
 
@@ -154,7 +161,7 @@ Run `npm test` and `npm run build`. Automated database/API tests use PGlite's lo
 
 Before event use on the deployed site, check:
 
-- [ ] SQL 001-005 are installed and the expiry cron job is active. Existing deployments apply only the self-contained 005 repair for this fix.
+- [ ] SQL 001-006 are installed and the expiry cron job is active. Existing deployments apply only the missing upgrade files: 005 for the random-order repair, then 006 for expanded clues.
 - [ ] Env variables are configured and `/api/leaderboard` responds successfully.
 - [ ] Two browser/device sessions display the same global leaderboard.
 - [ ] The same normalized roll is rejected in a fresh/incognito session, even after timeout.
