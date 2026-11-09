@@ -7,7 +7,7 @@
   const MAX_SCORE = TOTAL_QUESTIONS * POINTS_PER_ANSWER;
   const DURATION = 60000;
   const ANSWER_DELAY = 400;
-  const ROUND_TRANSITION = 900;
+  const ROUND_TRANSITION = 700;
   const sound = window.GameAudio;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const state = { screen: 'landing', round: 0, question: 0, score: 0, correct: 0, answered: 0, roll: '', deadline: 0, locked: false, resultId: null, newBest: false };
@@ -41,7 +41,7 @@
   }
   function sessionNotice(verified) {
     if (!verified.resumed) return;
-    if (verified.finished) notice('This roll already completed its one attempt. These are its saved results. Use Another Player for an unused roll.');
+    if (verified.finished) notice('This roll number has already played. These are its saved results. Choose New player to use another roll number.');
     else if (verified.order_type === 'legacy') notice('Resumed a saved attempt from before random ordering. Its original order and timer stay unchanged; unused roll numbers get shuffled questions.');
     else notice('Resumed your saved attempt. Its shuffled order and timer stay unchanged when you refresh.');
   }
@@ -87,30 +87,20 @@
   function clearEffects() {
     effectsTimers.forEach(clearTimeout); effectsTimers.clear();
     countFrames.forEach(cancelAnimationFrame); countFrames.clear();
-    $('confetti').replaceChildren();
     $('score-pop').classList.remove('pop');
     $('score').classList.remove('score-bump');
   }
   function syncAudioControls() {
     document.querySelectorAll('[data-sound-toggle]').forEach(button => {
-      button.textContent = sound.isMuted() ? 'Sound OFF' : 'Sound ON';
+      button.textContent = sound.isMuted() ? 'Sound off' : 'Sound on';
       button.setAttribute('aria-pressed', String(!sound.isMuted()));
       button.setAttribute('aria-label', sound.isMuted() ? 'Enable sound' : 'Mute sound');
     });
     document.querySelectorAll('[data-music-toggle]').forEach(button => {
-      button.textContent = sound.hasMusic() ? 'Music ON' : 'Music OFF';
+      button.textContent = sound.hasMusic() ? 'Music on' : 'Music off';
       button.setAttribute('aria-pressed', String(sound.hasMusic()));
       button.setAttribute('aria-label', sound.hasMusic() ? 'Disable background music' : 'Enable background music');
     });
-  }
-  function celebrate() {
-    if (reducedMotion.matches) return;
-    $('confetti').replaceChildren(...Array.from({ length: 36 }, (_, index) => {
-      const piece = document.createElement('i');
-      piece.style.cssText = `--x:${(index * 17.3) % 100}vw;--drift:${(index % 7 - 3) * 35}px;--delay:${index % 6 * 45}ms;--color:${['#22d3a0', '#38bdf8', '#a78bfa'][index % 3]};--spin:${index % 2 ? 400 : -400}deg`;
-      return piece;
-    }));
-    later(() => $('confetti').replaceChildren(), 2200);
   }
   function updateTimer() {
     const remaining = Math.max(0, state.deadline - performance.now());
@@ -131,7 +121,7 @@
     clearInterval(ticker); clearTimeout(transition); clearEffects(); sound.stop();
     sound.unlock().then(ready => { if (ready && (starting || ['intro', 'game'].includes(state.screen))) sound.play('start'); });
     const button = document.querySelector('.start-button');
-    button.disabled = true; notice('Loading challenge images?');
+    button.disabled = true; notice('Loading challenge images…');
     try {
       const loaded = await preloadImages();
       if (loaded.some(result => !result.loaded)) {
@@ -144,7 +134,7 @@
       Object.assign(state, { locked: false, resultId: null, newBest: false });
       lastTick = 60;
       $('score').textContent = state.score.toLocaleString();
-      $('final-score').textContent = '0'; $('personal-best').hidden = true;
+      $('final-score').textContent = '0';
       $('question-dots').replaceChildren(); updateProgress();
       sound.setActive(true);
       ticker = setInterval(updateTimer, 80);
@@ -161,14 +151,11 @@
     $('intro-round').textContent = `Round ${state.round + 1}`;
     $('intro-title').textContent = round.title;
     $('intro-instructions').textContent = round.instructions;
-    document.querySelector('.intro-meta').firstChild.textContent = `${round.count} QUESTIONS `;
+    document.querySelector('.intro-meta').firstChild.textContent = `${round.count} questions `;
     $('round-complete').hidden = state.round === 0;
-    $('intro').classList.toggle('round-transfer', state.round === 1);
     showScreen('intro');
     if (state.round === 1) sound.play('round');
     animateClass(document.querySelector('.intro-card'), 'intro-reveal');
-    const bar = document.querySelector('.intro-progress span');
-    bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = '';
     transition = setTimeout(() => {
       if (performance.now() >= state.deadline) { finishGame(true); return; }
       renderQuestion(); showScreen('game'); updateTimer();
@@ -180,9 +167,11 @@
     $('round-label').textContent = `Round ${state.round + 1} of 2`;
     $('round-name').textContent = round.title;
     $('question-counter').textContent = `Question ${question.position || state.answered + 1} of ${TOTAL_QUESTIONS}`;
-    $('question-category').textContent = state.round === 0 ? 'IDENTIFY THE PERSONALITY' : 'EXAMINE THE IMAGE';
+    $('question-category').textContent = state.round === 0 ? 'Identify the personality' : 'Examine the image';
     $('question-title').textContent = question.title;
     $('question-clue').textContent = question.clue;
+    // Set the presentation before swapping sources, including on session restore.
+    $('question-image').classList.toggle('round-one-image', question.round === 1);
     $('question-image').src = `assets/questions/${question.image}`;
     $('question-image').alt = state.round === 0 ? 'Mystery personality or fictional character' : 'Image to classify';
     $('key-count').textContent = question.options.length;
@@ -193,8 +182,7 @@
     $('answers').replaceChildren(...choices.map(({ text: option }, index) => {
       const button = document.createElement('button');
       button.className = 'answer'; button.type = 'button';
-      button.style.setProperty('--answer-delay', `${index * 35}ms`);
-      const letter = document.createElement('span'); letter.className = 'answer-letter'; letter.textContent = state.round === 1 ? (option === 'AI GENERATED' ? '⌘' : '▣') : String(index + 1).padStart(2, '0');
+      const letter = document.createElement('span'); letter.className = 'answer-letter'; letter.textContent = String(index + 1);
       letter.setAttribute('aria-hidden', 'true');
       const label = document.createElement('span'); label.className = 'answer-text'; label.textContent = answerLabel(option);
       button.append(letter, label);
@@ -218,9 +206,7 @@
     $('question-dots').style.setProperty('--total-questions', TOTAL_QUESTIONS);
     if (!$('question-dots').children.length) $('question-dots').replaceChildren(...Array.from({ length: TOTAL_QUESTIONS }, () => document.createElement('i')));
     [...$('question-dots').children].forEach((dot, index) => {
-      const wasDone = dot.classList.contains('done');
       dot.className = index < state.answered ? 'done' : index === current ? 'active' : '';
-      if (!wasDone && index < state.answered) dot.classList.add('just-completed');
     });
     $('question-dots').setAttribute('aria-label', `${state.answered} of ${TOTAL_QUESTIONS} answered. Current challenge ${current + 1}.`);
   }
@@ -246,7 +232,7 @@
       if (correct) { animateClass($('score-pop'), 'pop'); animateClass($('score'), 'score-bump'); }
       const button = $('answers').children[pending.index];
       button?.classList.add('selected', correct ? 'correct' : 'incorrect');
-      $('answer-feedback').textContent = verified.feedback ? (correct ? 'Signal matched. +100 points' : 'Not this time. +0 points') : 'Time is up. Finalizing received answers?';
+      $('answer-feedback').textContent = verified.feedback ? (correct ? 'Correct. +100 points' : 'Incorrect. No points added.') : 'Time is up. Finalizing received answers…';
       if (verified.feedback) { sound.play(correct ? 'correct' : 'wrong'); if (correct) sound.play('point'); }
       updateProgress(); pendingAnswer = null;
       transition = setTimeout(() => {
@@ -264,7 +250,7 @@
     if (finishing || state.screen === 'results' || state.screen === 'landing') return;
     finishing = true; state.locked = true;
     clearInterval(ticker); clearTimeout(transition); clearEffects(); sound.stop();
-    notice('Confirming your received answers with the server?');
+    notice('Confirming your received answers with the server…');
     try {
       const verified = await api.finish();
       applyState(verified); pendingAnswer = null; notice(''); renderResults(verified.result);
@@ -281,23 +267,20 @@
     state.roll = result.roll_number; state.resultId = result.id; state.newBest = result.score >= MAX_SCORE * .8;
     $('timer-box').classList.remove('urgent');
     $('final-score').textContent = '0'; $('score').textContent = result.score.toLocaleString();
-    $('personal-best').hidden = true;
-    $('results-title').textContent = 'CHALLENGE COMPLETE';
-    $('result-player').textContent = `PLAYER / ${result.roll_number}`;
-    $('performance-feedback').textContent = result.score >= MAX_SCORE * .8 ? 'Exceptional pattern recognition. Your intuition is a force to be reckoned with.' : result.score >= MAX_SCORE * .5 ? 'A strong signal. You spotted the patterns and kept your cool under pressure.' : result.score >= MAX_SCORE * .25 ? 'Curiosity is your advantage. Another run could be your breakthrough.' : 'Every great mind starts with curiosity. Recalibrate, trust your instincts, and try again.';
+    $('results-title').textContent = 'Challenge complete';
+    $('result-player').textContent = `Roll number ${result.roll_number}`;
+    $('performance-feedback').textContent = result.score >= MAX_SCORE * .8 ? 'Excellent work. A sharp eye for detail.' : result.score >= MAX_SCORE * .5 ? 'Well played. You got more than half right.' : result.score >= MAX_SCORE * .25 ? 'A few good calls under pressure.' : 'Thanks for taking the challenge.';
     $('correct-count').textContent = result.correct_answers;
     $('incorrect-count').textContent = result.incorrect_answers;
     $('unanswered-count').textContent = result.unanswered_questions;
-    $('answered-count').textContent = result.answered;
-    $('total-count').textContent = result.total;
     $('accuracy').textContent = `${result.accuracy}%`;
     $('final-rank').textContent = result.rank ? `#${result.rank}` : '?';
     $('time-remaining').textContent = `${Math.floor(result.time_remaining / 60)}:${String(result.time_remaining % 60).padStart(2, '0')}`;
-    $('finish-message').textContent = result.unanswered_questions ? `Time's up! ${result.answered} of ${result.total} answers received.` : `All ${result.total} answers received. That's some quick thinking!`;
-    $('save-status').textContent = 'Verified score saved to the global leaderboard. One attempt per roll number.';
+    $('finish-message').textContent = result.unanswered_questions ? `Time's up. You answered ${result.answered} of ${result.total} questions.` : `All ${result.total} questions completed.`;
+    $('save-status').textContent = 'Score saved to the leaderboard. One attempt per roll number.';
     showScreen('results'); countUp($('final-score'), result.score, 850);
     sound.play('end');
-    if (state.newBest) { celebrate(); later(() => sound.play('high'), 550); }
+    if (state.newBest) later(() => sound.play('high'), 550);
     later(() => sound.stop(), 1700);
   }
   async function restoreSession() {
@@ -323,12 +306,13 @@
     const modal = $('leaderboard-modal');
     if (!modal.open) modal.showModal();
     $('leaderboard-body').replaceChildren();
-    $('leaderboard-note').textContent = 'Loading global scores?';
+    $('leaderboard-note').textContent = 'Loading global scores…';
     $('leaderboard-retry').hidden = true;
     try {
       const { rows } = await api.leaderboard();
       $('leaderboard-body').replaceChildren(...rows.map(entry => {
         const tr = document.createElement('tr');
+        if (entry.rank <= 3) tr.classList.add(`podium-${entry.rank}`);
         if (entry.id === state.resultId) { tr.classList.add('current-player'); if (state.newBest) tr.classList.add('new-score-entry'); }
         [String(entry.rank).padStart(2, '0'), entry.roll_number, `${entry.score.toLocaleString()} / ${MAX_SCORE}`].forEach((value, column) => {
           const td = document.createElement('td'); td.textContent = value;
@@ -336,7 +320,7 @@
         });
         return tr;
       }));
-      $('leaderboard-note').textContent = rows.length ? 'Global verified scores. Ties favor the earliest submission.' : 'No completed attempts yet. Be the first to finish!';
+      $('leaderboard-note').textContent = rows.length ? 'Equal scores are ranked by earliest submission.' : 'No completed attempts yet.';
     } catch (error) { $('leaderboard-note').textContent = error.message; $('leaderboard-retry').hidden = false; }
   }
   $('start-form').addEventListener('submit', event => {
@@ -346,7 +330,7 @@
     if (!input.reportValidity()) return;
     state.roll = input.value.toUpperCase(); startGame();
   });
-  $('play-again').addEventListener('click', () => { clearEffects(); sound.stop(); showScreen('landing'); $('roll-number').value = ''; notice('One attempt per roll number. Enter another player?s roll number.'); $('roll-number').focus(); });
+  $('play-again').addEventListener('click', () => { clearEffects(); sound.stop(); showScreen('landing'); $('roll-number').value = ''; notice('One attempt per roll number. Enter the next player’s roll number.'); $('roll-number').focus(); });
   $('leaderboard-retry').addEventListener('click', openLeaderboard);
   $('back-home').addEventListener('click', () => { clearEffects(); sound.stop(); showScreen('landing'); notice(''); $('roll-number').focus(); });
   document.querySelectorAll('.leaderboard-trigger').forEach(button => button.addEventListener('click', openLeaderboard));
